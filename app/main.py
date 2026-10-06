@@ -1,27 +1,25 @@
-from sqlalchemy import text
+from sqlalchemy import select
 
-from app.database import engine
+from app.database import SessionLocal
+from app.models import Source
 
 
 def main():
-    with engine.connect() as connection:
-        result = connection.execute(
-            text(
-                '''
-                SELECT
-                    current_database(),
-                    current_user,
-                    version()
-                '''
-            )
-        )
-
-        row = result.fetchone()
+    with SessionLocal() as session:
+        sources = session.scalars(
+            select(Source).order_by(Source.id)
+        ).all()
 
         print('VulnScout database connection OK')
-        print(f'Database: {row[0]}')
-        print(f'User: {row[1]}')
-        print(f'PostgreSQL: {row[2]}')
+        print(f'Sources found: {len(sources)}')
+
+        for source in sources:
+            print(
+                f'{source.id}: '
+                f'{source.name} | '
+                f'{source.type} | '
+                f'enabled={source.enabled}'
+            )
 
 
 if __name__ == '__main__':
