@@ -7,11 +7,13 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     SmallInteger,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -23,10 +25,23 @@ from app.database import Base
 class Source(Base):
     __tablename__ = 'sources'
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    type: Mapped[str] = mapped_column(String(20), nullable=False)
-    url: Mapped[str] = mapped_column(Text, nullable=False)
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+    )
+    name: Mapped[str] = mapped_column(
+        String(255),
+        unique=True,
+        nullable=False,
+    )
+    type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+    )
+    url: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
     trust_level: Mapped[int] = mapped_column(
         SmallInteger,
         nullable=False,
@@ -59,9 +74,26 @@ class Source(Base):
 class Product(Base):
     __tablename__ = 'products'
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    vendor: Mapped[str] = mapped_column(String(255), nullable=False)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    __table_args__ = (
+        UniqueConstraint(
+            'vendor',
+            'name',
+            name='products_vendor_name_key',
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+    )
+    vendor: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
     enabled: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -82,13 +114,34 @@ class Product(Base):
 class ProductAlias(Base):
     __tablename__ = 'product_aliases'
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    __table_args__ = (
+        UniqueConstraint(
+            'product_id',
+            'alias',
+            name='product_aliases_product_id_alias_key',
+        ),
+        Index(
+            'idx_product_aliases_alias',
+            'alias',
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+    )
     product_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey('products.id', ondelete='CASCADE'),
+        ForeignKey(
+            'products.id',
+            ondelete='CASCADE',
+        ),
         nullable=False,
     )
-    alias: Mapped[str] = mapped_column(String(255), nullable=False)
+    alias: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
 
     product: Mapped['Product'] = relationship(
         back_populates='aliases',
@@ -98,15 +151,45 @@ class ProductAlias(Base):
 class Publication(Base):
     __tablename__ = 'publications'
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    __table_args__ = (
+        UniqueConstraint(
+            'source_id',
+            'url',
+            name='publications_source_id_url_key',
+        ),
+        Index(
+            'idx_publications_content_hash',
+            'content_hash',
+        ),
+        Index(
+            'idx_publications_published_at',
+            'published_at',
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+    )
     source_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey('sources.id', ondelete='RESTRICT'),
+        ForeignKey(
+            'sources.id',
+            ondelete='RESTRICT',
+        ),
         nullable=False,
     )
-    url: Mapped[str] = mapped_column(Text, nullable=False)
-    title: Mapped[str] = mapped_column(Text, nullable=False)
-    author: Mapped[str | None] = mapped_column(Text)
+    url: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+    title: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+    author: Mapped[str | None] = mapped_column(
+        Text,
+    )
     published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
     )
@@ -115,9 +198,15 @@ class Publication(Base):
         nullable=False,
         server_default=func.now(),
     )
-    raw_text: Mapped[str | None] = mapped_column(Text)
-    raw_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
-    content_hash: Mapped[str | None] = mapped_column(String(64))
+    raw_text: Mapped[str | None] = mapped_column(
+        Text,
+    )
+    raw_data: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+    )
+    content_hash: Mapped[str | None] = mapped_column(
+        String(64),
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -137,15 +226,53 @@ class Publication(Base):
 class Vulnerability(Base):
     __tablename__ = 'vulnerabilities'
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    cve: Mapped[str | None] = mapped_column(String(32))
-    vendor: Mapped[str | None] = mapped_column(String(255))
-    product: Mapped[str | None] = mapped_column(String(255))
-    title: Mapped[str | None] = mapped_column(Text)
-    description: Mapped[str | None] = mapped_column(Text)
-    affected_versions: Mapped[Any | None] = mapped_column(JSONB)
-    cvss_score: Mapped[Decimal | None] = mapped_column(Numeric(3, 1))
-    severity: Mapped[str | None] = mapped_column(String(20))
+    __table_args__ = (
+        Index(
+            'idx_vulnerabilities_cve',
+            'cve',
+        ),
+        Index(
+            'idx_vulnerabilities_exploitation_status',
+            'exploitation_status',
+        ),
+        Index(
+            'idx_vulnerabilities_severity',
+            'severity',
+        ),
+        Index(
+            'idx_vulnerabilities_zero_day_status',
+            'zero_day_status',
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+    )
+    cve: Mapped[str | None] = mapped_column(
+        String(32),
+    )
+    vendor: Mapped[str | None] = mapped_column(
+        String(255),
+    )
+    product: Mapped[str | None] = mapped_column(
+        String(255),
+    )
+    title: Mapped[str | None] = mapped_column(
+        Text,
+    )
+    description: Mapped[str | None] = mapped_column(
+        Text,
+    )
+    affected_versions: Mapped[Any | None] = mapped_column(
+        JSONB,
+    )
+    cvss_score: Mapped[Decimal | None] = mapped_column(
+        Numeric(3, 1),
+    )
+    severity: Mapped[str | None] = mapped_column(
+        String(20),
+    )
     exploitation_status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
@@ -166,7 +293,9 @@ class Vulnerability(Base):
         nullable=False,
         default=0,
     )
-    confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    confidence: Mapped[Decimal | None] = mapped_column(
+        Numeric(4, 3),
+    )
     first_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -199,11 +328,17 @@ class VulnerabilityPublication(Base):
 
     vulnerability_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey('vulnerabilities.id', ondelete='CASCADE'),
+        ForeignKey(
+            'vulnerabilities.id',
+            ondelete='CASCADE',
+        ),
         primary_key=True,
     )
     publication_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey('publications.id', ondelete='CASCADE'),
+        ForeignKey(
+            'publications.id',
+            ondelete='CASCADE',
+        ),
         primary_key=True,
     )
