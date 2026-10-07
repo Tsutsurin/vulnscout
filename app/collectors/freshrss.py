@@ -115,6 +115,7 @@ class FreshRSSClient:
                 external_id=item['id'],
                 feed_id=origin.get('streamId', feed_id),
                 source_name=origin.get('title', ''),
+                source_url=origin.get('htmlUrl', ''),
                 title=item.get('title', ''),
                 url=url or '',
                 author=item.get('author'),

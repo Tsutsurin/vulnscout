@@ -7,6 +7,7 @@ class CollectedPublication:
     external_id: str
     feed_id: str
     source_name: str
+    source_url: str
     title: str
     url: str
     author: str | None
