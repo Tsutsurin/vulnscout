@@ -24,5 +24,23 @@ services:
       timeout: 5s
       retries: 5
 
+  freshrss:
+    image: freshrss/freshrss:latest
+    container_name: vulnscout-freshrss
+    restart: unless-stopped
+
+    environment:
+      TZ: Europe/Moscow
+      CRON_MIN: '*/20'
+
+    volumes:
+      - freshrss_data:/var/www/FreshRSS/data
+      - freshrss_extensions:/var/www/FreshRSS/extensions
+
+    ports:
+      - '127.0.0.1:8080:80'
+
 volumes:
   postgres_data:
+  freshrss_data:
+  freshrss_extensions:
