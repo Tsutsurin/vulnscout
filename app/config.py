@@ -22,3 +22,17 @@ DATABASE_URL = (
     f'{POSTGRES_USER}:{POSTGRES_PASSWORD}'
     f'@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}'
 )
+
+
+FRESHRSS_URL = os.getenv(
+    'FRESHRSS_URL',
+    'http://127.0.0.1:8080/api/greader.php',
+)
+FRESHRSS_USERNAME = os.getenv('FRESHRSS_USERNAME')
+FRESHRSS_API_PASSWORD = os.getenv('FRESHRSS_API_PASSWORD')
+
+if not FRESHRSS_USERNAME:
+    raise RuntimeError('FRESHRSS_USERNAME is not configured')
+
+if not FRESHRSS_API_PASSWORD:
+    raise RuntimeError('FRESHRSS_API_PASSWORD is not configured')
