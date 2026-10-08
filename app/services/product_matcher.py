@@ -20,11 +20,16 @@ class ProductMatcher:
         self,
         publication: Publication,
     ) -> list[ProductMatch]:
+        summary = None
+
+        if publication.raw_data:
+            summary = publication.raw_data.get('summary')
+
         text = ' '.join(
             part
             for part in [
                 publication.title,
-                publication.raw_text,
+                summary,
             ]
             if part
         ).lower()

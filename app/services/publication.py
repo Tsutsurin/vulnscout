@@ -74,10 +74,11 @@ class PublicationService:
             title=publication.title,
             author=publication.author,
             published_at=publication.published_at,
-            raw_text=publication.summary,
+            raw_text=None,
             raw_data={
                 'external_id': publication.external_id,
                 'feed_id': publication.feed_id,
+                'summary': publication.summary,
             },
             content_hash=self._content_hash(publication),
         )

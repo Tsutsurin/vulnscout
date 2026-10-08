@@ -1,23 +1,24 @@
+
 from datetime import datetime
-from decimal import Decimal
-from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
     Integer,
     Numeric,
+    PrimaryKeyConstraint,
     SmallInteger,
     String,
     Text,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql import func
 
 from app.database import Base
 
@@ -29,37 +30,46 @@ class Source(Base):
         BigInteger,
         primary_key=True,
     )
+
     name: Mapped[str] = mapped_column(
         String(255),
-        unique=True,
         nullable=False,
+        unique=True,
     )
+
     type: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
     )
+
     url: Mapped[str] = mapped_column(
         Text,
         nullable=False,
     )
+
     trust_level: Mapped[int] = mapped_column(
         SmallInteger,
         nullable=False,
-        default=50,
+        server_default='50',
     )
+
     enabled: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
-        default=True,
+        server_default='true',
     )
+
     poll_interval: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
-        default=300,
+        server_default='300',
     )
+
     last_checked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
+        nullable=True,
     )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -67,12 +77,57 @@ class Source(Base):
     )
 
     publications: Mapped[list['Publication']] = relationship(
+        'Publication',
         back_populates='source',
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            'trust_level BETWEEN 0 AND 100',
+            name='sources_trust_level_check',
+        ),
+        CheckConstraint(
+            'poll_interval > 0',
+            name='sources_poll_interval_check',
+        ),
     )
 
 
 class Product(Base):
     __tablename__ = 'products'
+
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+    )
+
+    vendor: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default='true',
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    aliases: Mapped[list['ProductAlias']] = relationship(
+        'ProductAlias',
+        back_populates='product',
+        cascade='all, delete-orphan',
+    )
 
     __table_args__ = (
         UniqueConstraint(
@@ -82,37 +137,33 @@ class Product(Base):
         ),
     )
 
+
+class ProductAlias(Base):
+    __tablename__ = 'product_aliases'
+
     id: Mapped[int] = mapped_column(
         BigInteger,
         primary_key=True,
     )
-    vendor: Mapped[str] = mapped_column(
+
+    product_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            'products.id',
+            ondelete='CASCADE',
+        ),
+        nullable=False,
+    )
+
+    alias: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
     )
-    name: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
-    )
-    enabled: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=True,
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
 
-    aliases: Mapped[list['ProductAlias']] = relationship(
-        back_populates='product',
-        cascade='all, delete-orphan',
+    product: Mapped['Product'] = relationship(
+        'Product',
+        back_populates='aliases',
     )
-
-
-class ProductAlias(Base):
-    __tablename__ = 'product_aliases'
 
     __table_args__ = (
         UniqueConstraint(
@@ -126,30 +177,83 @@ class ProductAlias(Base):
         ),
     )
 
+
+class Publication(Base):
+    __tablename__ = 'publications'
+
     id: Mapped[int] = mapped_column(
         BigInteger,
         primary_key=True,
     )
-    product_id: Mapped[int] = mapped_column(
+
+    source_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
-            'products.id',
-            ondelete='CASCADE',
+            'sources.id',
+            ondelete='RESTRICT',
         ),
         nullable=False,
     )
-    alias: Mapped[str] = mapped_column(
-        String(255),
+
+    url: Mapped[str] = mapped_column(
+        Text,
         nullable=False,
     )
 
-    product: Mapped['Product'] = relationship(
-        back_populates='aliases',
+    title: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
     )
 
+    author: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
 
-class Publication(Base):
-    __tablename__ = 'publications'
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    collected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    raw_text: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    raw_data: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
+    content_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    source: Mapped['Source'] = relationship(
+        'Source',
+        back_populates='publications',
+    )
+
+    vulnerability_links: Mapped[
+        list['VulnerabilityPublication']
+    ] = relationship(
+        'VulnerabilityPublication',
+        back_populates='publication',
+        cascade='all, delete-orphan',
+    )
 
     __table_args__ = (
         UniqueConstraint(
@@ -167,69 +271,128 @@ class Publication(Base):
         ),
     )
 
+
+class Vulnerability(Base):
+    __tablename__ = 'vulnerabilities'
+
     id: Mapped[int] = mapped_column(
         BigInteger,
         primary_key=True,
     )
-    source_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey(
-            'sources.id',
-            ondelete='RESTRICT',
-        ),
-        nullable=False,
+
+    cve: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
     )
-    url: Mapped[str] = mapped_column(
+
+    vendor: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    product: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    title: Mapped[str | None] = mapped_column(
         Text,
-        nullable=False,
+        nullable=True,
     )
-    title: Mapped[str] = mapped_column(
+
+    description: Mapped[str | None] = mapped_column(
         Text,
+        nullable=True,
+    )
+
+    affected_versions: Mapped[list | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
+    cvss_score: Mapped[float | None] = mapped_column(
+        Numeric(3, 1),
+        nullable=True,
+    )
+
+    severity: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    exploitation_status: Mapped[str] = mapped_column(
+        String(20),
         nullable=False,
+        server_default='UNKNOWN',
     )
-    author: Mapped[str | None] = mapped_column(
-        Text,
+
+    patch_status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        server_default='UNKNOWN',
     )
-    published_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
+
+    zero_day_status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        server_default='NONE',
     )
-    collected_at: Mapped[datetime] = mapped_column(
+
+    zero_day_score: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default='0',
+    )
+
+    confidence: Mapped[float | None] = mapped_column(
+        Numeric(4, 3),
+        nullable=True,
+    )
+
+    first_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
-    raw_text: Mapped[str | None] = mapped_column(
-        Text,
+
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
-    raw_data: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB,
-    )
-    content_hash: Mapped[str | None] = mapped_column(
-        String(64),
-    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
 
-    source: Mapped['Source'] = relationship(
-        back_populates='publications',
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
 
-    vulnerabilities: Mapped[list['Vulnerability']] = relationship(
-        secondary='vulnerability_publications',
-        back_populates='publications',
+    publication_links: Mapped[
+        list['VulnerabilityPublication']
+    ] = relationship(
+        'VulnerabilityPublication',
+        back_populates='vulnerability',
+        cascade='all, delete-orphan',
     )
-
-
-class Vulnerability(Base):
-    __tablename__ = 'vulnerabilities'
 
     __table_args__ = (
+        UniqueConstraint(
+            'cve',
+            name='uq_vulnerabilities_cve',
+        ),
         Index(
             'idx_vulnerabilities_cve',
             'cve',
+        ),
+        Index(
+            'idx_vulnerabilities_zero_day_status',
+            'zero_day_status',
         ),
         Index(
             'idx_vulnerabilities_exploitation_status',
@@ -239,88 +402,8 @@ class Vulnerability(Base):
             'idx_vulnerabilities_severity',
             'severity',
         ),
-        Index(
-            'idx_vulnerabilities_zero_day_status',
-            'zero_day_status',
-        ),
     )
 
-    id: Mapped[int] = mapped_column(
-        BigInteger,
-        primary_key=True,
-    )
-    cve: Mapped[str | None] = mapped_column(
-        String(32),
-    )
-    vendor: Mapped[str | None] = mapped_column(
-        String(255),
-    )
-    product: Mapped[str | None] = mapped_column(
-        String(255),
-    )
-    title: Mapped[str | None] = mapped_column(
-        Text,
-    )
-    description: Mapped[str | None] = mapped_column(
-        Text,
-    )
-    affected_versions: Mapped[Any | None] = mapped_column(
-        JSONB,
-    )
-    cvss_score: Mapped[Decimal | None] = mapped_column(
-        Numeric(3, 1),
-    )
-    severity: Mapped[str | None] = mapped_column(
-        String(20),
-    )
-    exploitation_status: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-        default='UNKNOWN',
-    )
-    patch_status: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-        default='UNKNOWN',
-    )
-    zero_day_status: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-        default='NONE',
-    )
-    zero_day_score: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=0,
-    )
-    confidence: Mapped[Decimal | None] = mapped_column(
-        Numeric(4, 3),
-    )
-    first_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-    last_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-
-    publications: Mapped[list['Publication']] = relationship(
-        secondary='vulnerability_publications',
-        back_populates='vulnerabilities',
-    )
 
 
 class VulnerabilityPublication(Base):
@@ -332,13 +415,47 @@ class VulnerabilityPublication(Base):
             'vulnerabilities.id',
             ondelete='CASCADE',
         ),
-        primary_key=True,
+        nullable=False,
     )
+
     publication_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
             'publications.id',
             ondelete='CASCADE',
         ),
-        primary_key=True,
+        nullable=False,
+    )
+
+    evidence: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
+    score_reasons: Mapped[list | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
+    analyzed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    vulnerability: Mapped['Vulnerability'] = relationship(
+        'Vulnerability',
+        back_populates='publication_links',
+    )
+
+    publication: Mapped['Publication'] = relationship(
+        'Publication',
+        back_populates='vulnerability_links',
+    )
+
+    __table_args__ = (
+        PrimaryKeyConstraint(
+            'vulnerability_id',
+            'publication_id',
+            name='vulnerability_publications_pkey',
+        ),
     )

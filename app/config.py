@@ -36,3 +36,21 @@ if not FRESHRSS_USERNAME:
 
 if not FRESHRSS_API_PASSWORD:
     raise RuntimeError('FRESHRSS_API_PASSWORD is not configured')
+
+
+AI_BASE_URL = os.getenv(
+    'AI_BASE_URL',
+    'https://api.groq.com/openai/v1',
+)
+
+AI_API_KEY = os.getenv('AI_API_KEY')
+
+AI_MODEL = os.getenv(
+    'AI_MODEL',
+    'openai/gpt-oss-120b',
+)
+
+if not AI_API_KEY:
+    raise RuntimeError(
+        'AI_API_KEY is not configured'
+    )
