@@ -40,6 +40,41 @@ services:
     ports:
       - '127.0.0.1:8080:80'
 
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: vulnscout-worker
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: '5432'
+      FRESHRSS_URL: http://freshrss/api/greader.php
+
+    command:
+      - python
+      - -m
+      - app.worker
+      - --interval
+      - '300'
+      - --limit-per-feed
+      - '20'
+      - --analysis-limit
+      - '50'
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      freshrss:
+        condition: service_started
+
+    stop_grace_period: 30s
+
 volumes:
   postgres_data:
   freshrss_data:
