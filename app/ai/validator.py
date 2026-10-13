@@ -1,10 +1,13 @@
+
 from dataclasses import dataclass, field
 
+from app.ai.evidence_context import EvidenceContextValidator
 from app.ai.models import (
     AIAnalysisResult,
     AIVulnerability,
     ExploitationStatus,
     PatchStatus,
+    ZeroDayStatus,
 )
 
 
@@ -23,6 +26,20 @@ class ValidationResult:
 
 
 class AIResultValidator:
+    EVIDENCE_FIELDS = (
+        'vulnerability_type',
+        'affected_versions',
+        'cvss',
+        'exploitation',
+        'patch',
+        'zero_day',
+    )
+
+    CONTEXT_FIELDS = (
+        'exploitation',
+        'zero_day',
+    )
+
     def validate(
         self,
         result: AIAnalysisResult,
@@ -31,88 +48,127 @@ class AIResultValidator:
     ) -> ValidationResult:
         validation = ValidationResult()
         normalized_text = self._normalize(article_text)
-        known_cves = {cve.upper() for cve in extracted_cves}
 
-        for vulnerability in result.vulnerabilities:
+        known_cves = {
+            cve.upper()
+            for cve in extracted_cves
+        }
+
+        for original in result.vulnerabilities:
+            vulnerability = original.model_copy(deep=True)
             issues: list[ValidationIssue] = []
 
             if (
                 vulnerability.cve
                 and vulnerability.cve.upper() not in known_cves
             ):
-                issues.append(ValidationIssue(
-                    cve=vulnerability.cve,
-                    field='cve',
-                    message='CVE was not found by CVEExtractor',
-                ))
+                validation.rejected.append(vulnerability)
 
-            evidence_fields = {
-                'vulnerability_type': vulnerability.evidence.vulnerability_type,
-                'affected_versions': vulnerability.evidence.affected_versions,
-                'cvss': vulnerability.evidence.cvss,
-                'exploitation': vulnerability.evidence.exploitation,
-                'patch': vulnerability.evidence.patch,
-                'zero_day': vulnerability.evidence.zero_day,
-            }
-
-            for field_name, evidence in evidence_fields.items():
-                if evidence and self._normalize(evidence) not in normalized_text:
-                    issues.append(ValidationIssue(
+                validation.issues.append(
+                    ValidationIssue(
                         cve=vulnerability.cve,
-                        field=f'evidence.{field_name}',
-                        message='Evidence was not found in article text',
-                    ))
+                        field='cve',
+                        message='CVE was not found by CVEExtractor',
+                    )
+                )
+                continue
+
+            for field_name in self.EVIDENCE_FIELDS:
+                quote = getattr(
+                    vulnerability.evidence,
+                    field_name,
+                )
+
+                if not quote:
+                    continue
+
+                if self._normalize(quote) not in normalized_text:
+                    setattr(
+                        vulnerability.evidence,
+                        field_name,
+                        None,
+                    )
+
+                    issues.append(
+                        ValidationIssue(
+                            cve=vulnerability.cve,
+                            field=f'evidence.{field_name}',
+                            message='Evidence not found in article',
+                        )
+                    )
+                    continue
+
+                if (
+                    field_name in self.CONTEXT_FIELDS
+                    and vulnerability.cve
+                ):
+                    check = EvidenceContextValidator.check(
+                        article_text=article_text,
+                        cve=vulnerability.cve,
+                        quote=quote,
+                    )
+
+                    if not check.valid:
+                        setattr(
+                            vulnerability.evidence,
+                            field_name,
+                            None,
+                        )
+
+                        issues.append(
+                            ValidationIssue(
+                                cve=vulnerability.cve,
+                                field=f'evidence.{field_name}',
+                                message=check.reason,
+                            )
+                        )
 
             if (
                 vulnerability.vulnerability_type
                 and not vulnerability.evidence.vulnerability_type
             ):
-                issues.append(ValidationIssue(
-                    cve=vulnerability.cve,
-                    field='vulnerability_type',
-                    message='Vulnerability type has no evidence',
-                ))
+                vulnerability.vulnerability_type = None
 
             if (
                 vulnerability.affected_versions
                 and not vulnerability.evidence.affected_versions
             ):
-                issues.append(ValidationIssue(
-                    cve=vulnerability.cve,
-                    field='affected_versions',
-                    message='Affected versions have no evidence',
-                ))
+                vulnerability.affected_versions = []
 
-            if (
-                (vulnerability.cvss_score is not None
-                 or vulnerability.severity not in {None, 'UNKNOWN'})
-                and not vulnerability.evidence.cvss
-            ):
-                issues.append(ValidationIssue(
-                    cve=vulnerability.cve,
-                    field='cvss',
-                    message='CVSS has no evidence',
-                ))
+            if not vulnerability.evidence.cvss:
+                if vulnerability.cvss_score is not None:
+                    vulnerability.cvss_score = None
 
-            # A status without a supporting article quote is not a fact.
-            # Downgrade to UNKNOWN rather than discarding a valid CVE.
-            if (
-                vulnerability.exploitation_status != ExploitationStatus.UNKNOWN
-                and not vulnerability.evidence.exploitation
-            ):
-                vulnerability.exploitation_status = ExploitationStatus.UNKNOWN
+                    issues.append(
+                        ValidationIssue(
+                            cve=vulnerability.cve,
+                            field='cvss',
+                            message='Unverified CVSS cleared',
+                        )
+                    )
 
-            if (
-                vulnerability.patch_status != PatchStatus.UNKNOWN
-                and not vulnerability.evidence.patch
-            ):
-                vulnerability.patch_status = PatchStatus.UNKNOWN
+                vulnerability.severity = 'UNKNOWN'
 
-            if issues:
-                validation.rejected.append(vulnerability)
-                validation.issues.extend(issues)
-            else:
-                validation.accepted.append(vulnerability)
+            if not vulnerability.evidence.exploitation:
+                vulnerability.exploitation_status = (
+                    ExploitationStatus.UNKNOWN
+                )
+
+            if not vulnerability.evidence.patch:
+                vulnerability.patch_status = (
+                    PatchStatus.UNKNOWN
+                )
+
+            if not vulnerability.evidence.zero_day:
+                if vulnerability.zero_day_status == ZeroDayStatus.POTENTIAL:
+                    vulnerability.zero_day_status = ZeroDayStatus.NONE
+
+                # This flag contributes to the 0-day score.
+                # Do not trust it without supported context.
+                vulnerability.previously_unknown = None
+
+            validation.accepted.append(vulnerability)
+            validation.issues.extend(issues)
 
         return validation
 

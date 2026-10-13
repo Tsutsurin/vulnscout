@@ -1,3 +1,4 @@
+
 import logging
 
 from dataclasses import dataclass, field
@@ -128,7 +129,10 @@ class AnalysisPipeline:
             attempted_ids.add(publication_id)
 
             results.append(
-                self._process_claimed(publication_id)
+                self._process_claimed(
+                    publication_id,
+                    notify=True,
+                )
             )
 
         return results
@@ -136,6 +140,8 @@ class AnalysisPipeline:
     def process_by_id(
         self,
         publication_id: int,
+        *,
+        notify: bool = False,
     ) -> PipelineResult:
         if publication_id < 1:
             raise ValueError(
@@ -168,11 +174,15 @@ class AnalysisPipeline:
             )
 
         logger.info(
-            'Publication %s manually claimed',
+            'Publication %s manually claimed | notify=%s',
             publication_id,
+            notify,
         )
 
-        return self._process_claimed(publication_id)
+        return self._process_claimed(
+            publication_id,
+            notify=notify,
+        )
 
     def _claim_next(
         self,
@@ -225,10 +235,13 @@ class AnalysisPipeline:
     def _process_claimed(
         self,
         publication_id: int,
+        *,
+        notify: bool = True,
     ) -> PipelineResult:
         try:
             return self._analyze_publication(
-                publication_id
+                publication_id,
+                notify=notify,
             )
 
         except Exception as error:
@@ -261,6 +274,8 @@ class AnalysisPipeline:
     def _analyze_publication(
         self,
         publication_id: int,
+        *,
+        notify: bool = True,
     ) -> PipelineResult:
         with SessionLocal() as session:
             publication = session.get(
@@ -341,6 +356,27 @@ class AnalysisPipeline:
             article_text=full_text,
         )
 
+        # Diagnostic logging before validation.
+        # This lets us distinguish missing AI evidence
+        # from evidence removed by the validator.
+        for vulnerability in ai_result.vulnerabilities:
+            logger.info(
+                'Publication %s | AI RAW | '
+                'CVE=%s | '
+                'exploitation_status=%s | '
+                'zero_day_status=%s | '
+                'previously_unknown=%s | '
+                'exploitation=%r | '
+                'zero_day=%r',
+                publication_id,
+                vulnerability.cve,
+                vulnerability.exploitation_status,
+                vulnerability.zero_day_status,
+                vulnerability.previously_unknown,
+                vulnerability.evidence.exploitation,
+                vulnerability.evidence.zero_day,
+            )
+
         validation = self.validator.validate(
             result=ai_result,
             article_text=full_text,
@@ -363,6 +399,25 @@ class AnalysisPipeline:
                 issue.cve,
                 issue.field,
                 issue.message,
+            )
+
+        # Diagnostic logging after validation.
+        for vulnerability in validation.accepted:
+            logger.info(
+                'Publication %s | AI VALIDATED | '
+                'CVE=%s | '
+                'exploitation_status=%s | '
+                'zero_day_status=%s | '
+                'previously_unknown=%s | '
+                'exploitation=%r | '
+                'zero_day=%r',
+                publication_id,
+                vulnerability.cve,
+                vulnerability.exploitation_status,
+                vulnerability.zero_day_status,
+                vulnerability.previously_unknown,
+                vulnerability.evidence.exploitation,
+                vulnerability.evidence.zero_day,
             )
 
         if validation.rejected and not validation.accepted:
@@ -410,6 +465,17 @@ class AnalysisPipeline:
                     vulnerability
                 )
 
+                logger.info(
+                    'Publication %s | AI SCORE | '
+                    'CVE=%s | status=%s | '
+                    'score=%s | reasons=%s',
+                    publication_id,
+                    vulnerability.cve,
+                    score_result.status,
+                    score_result.score,
+                    score_result.reasons,
+                )
+
                 saved = service.save_analysis(
                     publication=publication,
                     vulnerability=vulnerability,
@@ -421,20 +487,21 @@ class AnalysisPipeline:
                     or f'NO-CVE:{saved.vulnerability.id}'
                 )
 
-                queued = notification_service.enqueue(
-                    vulnerability=saved.vulnerability,
-                    publication=publication,
-                )
-
-                if queued:
-                    queued_count += 1
-
-                    logger.info(
-                        'Publication %s | '
-                        'Telegram notification queued: %s',
-                        publication_id,
-                        saved.vulnerability.cve,
+                if notify:
+                    queued = notification_service.enqueue(
+                        vulnerability=saved.vulnerability,
+                        publication=publication,
                     )
+
+                    if queued:
+                        queued_count += 1
+
+                        logger.info(
+                            'Publication %s | '
+                            'Telegram notification queued: %s',
+                            publication_id,
+                            saved.vulnerability.cve,
+                        )
 
             publication.analysis_status = 'COMPLETED'
             publication.analysis_error = None
