@@ -28,6 +28,7 @@ logs/
 
 # Local data
 data/
+*.dump
 
 # Secrets
 *.key
