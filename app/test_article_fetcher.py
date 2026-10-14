@@ -3,8 +3,8 @@ from sqlalchemy import select
 from app.database import SessionLocal
 from app.models import Publication
 from app.services.article_fetcher import (
-    ArticleFetchError,
     ArticleFetcher,
+    ArticleFetchError,
 )
 
 

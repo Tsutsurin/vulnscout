@@ -1,7 +1,6 @@
 from app.database import SessionLocal
 from app.services.product import ProductService
 
-
 TEST_PRODUCTS = [
     {
         'vendor': 'Citrix',

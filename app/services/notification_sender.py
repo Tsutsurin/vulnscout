@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
@@ -69,7 +69,7 @@ class NotificationSender:
 
                     notification.status = 'SENT'
                     notification.sent_at = datetime.now(
-                        timezone.utc
+                        UTC
                     )
                     notification.last_error = None
 

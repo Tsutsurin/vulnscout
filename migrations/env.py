@@ -1,14 +1,10 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 from app.config import DATABASE_URL
 from app.database import Base
-
-import app.models
-import app.models_notification
-
 
 config = context.config
 

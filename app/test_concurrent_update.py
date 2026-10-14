@@ -8,7 +8,6 @@ from app.database import SessionLocal
 from app.models import Vulnerability
 from app.services.vulnerability import VulnerabilityService
 
-
 TEST_CVE = 'CVE-2099-99998'
 
 

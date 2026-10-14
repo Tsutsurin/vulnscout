@@ -2,7 +2,6 @@ from pydantic import ValidationError
 
 from app.ai.models import AIAnalysisResult
 
-
 VALID_RESPONSE = {
     'vulnerabilities': [
         {

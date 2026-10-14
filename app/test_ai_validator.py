@@ -1,7 +1,6 @@
 from app.ai.models import AIAnalysisResult
 from app.ai.validator import AIResultValidator
 
-
 ARTICLE_TEXT = """
 Both of these RCE vulnerabilities carry a critical
 CVSSv4 score of 9.5, and both have been confirmed as

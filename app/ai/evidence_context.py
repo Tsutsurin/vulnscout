@@ -1,8 +1,6 @@
 
 import re
-
 from dataclasses import dataclass
-
 
 CVE_PATTERN = re.compile(
     r'\bCVE-\d{4}-\d{4,}\b',

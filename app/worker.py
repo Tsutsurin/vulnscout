@@ -2,7 +2,6 @@ import argparse
 import logging
 import signal
 import threading
-
 from dataclasses import dataclass
 
 from app.collectors.freshrss import FreshRSSClient
@@ -10,7 +9,6 @@ from app.database import SessionLocal
 from app.services.analysis_pipeline import AnalysisPipeline
 from app.services.notification_sender import NotificationSender
 from app.services.publication import PublicationService
-
 
 logger = logging.getLogger(__name__)
 

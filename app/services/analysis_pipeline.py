@@ -1,8 +1,7 @@
 
 import logging
-
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -12,8 +11,8 @@ from app.ai.validator import AIResultValidator
 from app.database import SessionLocal
 from app.models import Publication
 from app.services.article_fetcher import (
-    ArticleFetchError,
     ArticleFetcher,
+    ArticleFetchError,
 )
 from app.services.cve_extractor import CVEExtractor
 from app.services.notification import NotificationService
@@ -23,7 +22,6 @@ from app.services.product_matcher import (
 )
 from app.services.vulnerability import VulnerabilityService
 from app.services.zero_day_scorer import ZeroDayScorer
-
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +168,7 @@ class AnalysisPipeline:
             publication.analysis_attempts += 1
             publication.analysis_error = None
             publication.analysis_started_at = (
-                datetime.now(timezone.utc)
+                datetime.now(UTC)
             )
 
         logger.info(
@@ -220,7 +218,7 @@ class AnalysisPipeline:
             publication.analysis_attempts += 1
             publication.analysis_error = None
             publication.analysis_started_at = (
-                datetime.now(timezone.utc)
+                datetime.now(UTC)
             )
 
             publication_id = publication.id
@@ -507,7 +505,7 @@ class AnalysisPipeline:
             publication.analysis_error = None
             publication.analysis_started_at = None
             publication.analyzed_at = datetime.now(
-                timezone.utc
+                UTC
             )
 
         logger.info(
@@ -552,7 +550,7 @@ class AnalysisPipeline:
             publication.analysis_error = None
             publication.analysis_started_at = None
             publication.analyzed_at = datetime.now(
-                timezone.utc
+                UTC
             )
 
     @staticmethod
@@ -580,7 +578,7 @@ class AnalysisPipeline:
             publication.analysis_error = None
             publication.analysis_started_at = None
             publication.analyzed_at = datetime.now(
-                timezone.utc
+                UTC
             )
 
     @staticmethod
@@ -612,7 +610,7 @@ class AnalysisPipeline:
             )
 
         cutoff = (
-            datetime.now(timezone.utc)
+            datetime.now(UTC)
             - timedelta(minutes=timeout_minutes)
         )
 

@@ -5,9 +5,8 @@ Revision ID: a81008b00101
 Revises: 59a9925f2b71
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = 'a81008b00101'
 down_revision = '59a9925f2b71'

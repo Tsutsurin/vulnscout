@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import requests
 
@@ -102,7 +102,7 @@ class FreshRSSClient:
             published_at = (
                 datetime.fromtimestamp(
                     published,
-                    tz=timezone.utc,
+                    tz=UTC,
                 )
                 if published
                 else None

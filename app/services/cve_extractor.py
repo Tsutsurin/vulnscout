@@ -1,6 +1,5 @@
 import re
 
-
 CVE_PATTERN = re.compile(
     r'\bCVE-\d{4}-\d{4,}\b',
     re.IGNORECASE,
